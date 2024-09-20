@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+np.set_printoptions(suppress=True)
 
 def solve(arguments,boundaries,initial, conditions,pde):
     args = arguments
@@ -12,17 +13,22 @@ def solve(arguments,boundaries,initial, conditions,pde):
     nt = int(T / dt) #total time points
     var0 = initial
 
-    def laplacian(Z):
+    def laplacian(Z,D):
         Z_new = np.zeros_like(Z)
+        D_x = gradient_x(D)
+        D_y = gradient_y(D)
 
         Ztop = np.roll(Z, 1, axis=0)
         Zleft = np.roll(Z, 1, axis=1)
         Zbottom = np.roll(Z, -1, axis=0)
         Zright = np.roll(Z, -1, axis=1)
         
-        Z_new = (Ztop + Zleft + Zbottom + Zright - 4 * Z) / dx**2
+        lap = (Ztop + Zleft + Zbottom + Zright - 4 * Z) / dx**2
 
-        return Z_new
+        # Incorporate spatially varying D in the Laplacian
+        laplacian_with_D = D * lap + D_x * gradient_x(Z) + D_y * gradient_y(Z)
+
+        return laplacian_with_D
 
     def gradient_x(c):
         grad_x = np.zeros_like(c)
@@ -38,14 +44,29 @@ def solve(arguments,boundaries,initial, conditions,pde):
         
         return grad_y
 
-    def pd_eq(t, y, size, D, v, R):
+    def pd_eq(t, y, size, D, v_x,v_y, R):
+        var = y.reshape((size, size))
+
+        # Diffusion term with spatially varying D
+        delta_var = laplacian(var, D)
+
+        # Advection terms (with spatially varying velocities)
+        advection_term = np.multiply(v_x, gradient_x(var)) + np.multiply(v_y, gradient_y(var))
+
+        # Complete PDE
+        dvar_dt = delta_var - advection_term + R * var
+
+        return dvar_dt.ravel()
+        '''
         var = y.reshape((size, size))
         
         delta_var = laplacian(var)
+        x_res = np.multiply(v_x,gradient_x(var))
 
-        dvar_dt = D * delta_var - (v[0]*gradient_x(var)+v[1]*gradient_y(var)) + R*var
+        dvar_dt = np.multiply(D,delta_var) - (np.multiply(v_x,gradient_x(var))+np.multiply(v_y,gradient_y(var))) + R*var
         
         return dvar_dt.ravel()
+        '''
 
     y0 = var0.ravel()
 
@@ -83,27 +104,44 @@ X_length = posX_boundary-negX_boundary
 Y_length = posY_boundary-negY_boundary
 radius = 1
 
-size = 100
+size = 500
 dx = float(X_length) / size
 dy = float(Y_length) / size
 T = 0.3 #time    
-dt = 0.01 #change in time
+dt = 0.001 #change in time
 
 x = np.linspace(negX_boundary,posX_boundary, size)
 y = np.linspace(negY_boundary,posY_boundary, size)
 X, Y = np.meshgrid(x, y)
 var0 = np.zeros((size, size))
-var0[np.sqrt((X-3)**2 + (Y-3)**2) < radius] = 1.0
-D = 0.5
-v = [1,0]
-R = 0.0
+var0[np.sqrt((X+2)**2 + (Y+2)**2) < radius] = 1.0
 
+def gaussian_filter(sigma=1, muu=0):
+ 
+    # Initializing value of x,y as grid of kernel size
+    # in the range of kernel size
+ 
+    x, y = np.meshgrid(np.linspace(negX_boundary, posX_boundary, size),
+                       np.linspace(negY_boundary, posY_boundary, size))
+    dst = np.sqrt(x**2+y**2)
+ 
+    # lower normal part of gaussian
+    normal = 1/(2.0 * np.pi * sigma**2)
+ 
+    # Calculating Gaussian filter
+    gauss = np.exp(-((dst-muu)**2 / (2.0 * sigma**2))) * normal
+    gauss /= np.max(gauss)
+    return gauss
+
+D = gaussian_filter(1,0)
+R = 0.0
+v_x = np.full((size,size),5)
+v_y = np.full((size,size),0)
 pde = 'D * delta_var - (v[0]*gradient_x(var)+v[1]*gradient_y(var)) + R*var'
 
-solve([D, v, R],
+solve([D, v_x,v_y, R],
       [[negX_boundary,posX_boundary],
        [negY_boundary,posY_boundary]],
        var0,
        [size, dx, dy, T, dt],
        pde)
-
