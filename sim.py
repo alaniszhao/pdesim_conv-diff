@@ -25,7 +25,6 @@ def solve(arguments,boundaries,initial, conditions,pde):
         
         lap = (Ztop + Zleft + Zbottom + Zright - 4 * Z) / dx**2
 
-        # Incorporate spatially varying D in the Laplacian
         laplacian_with_D = D * lap + D_x * gradient_x(Z) + D_y * gradient_y(Z)
 
         return laplacian_with_D
@@ -47,26 +46,13 @@ def solve(arguments,boundaries,initial, conditions,pde):
     def pd_eq(t, y, size, D, v_x,v_y, R):
         var = y.reshape((size, size))
 
-        # Diffusion term with spatially varying D
         delta_var = laplacian(var, D)
 
-        # Advection terms (with spatially varying velocities)
         advection_term = np.multiply(v_x, gradient_x(var)) + np.multiply(v_y, gradient_y(var))
 
-        # Complete PDE
         dvar_dt = delta_var - advection_term + R * var
 
         return dvar_dt.ravel()
-        '''
-        var = y.reshape((size, size))
-        
-        delta_var = laplacian(var)
-        x_res = np.multiply(v_x,gradient_x(var))
-
-        dvar_dt = np.multiply(D,delta_var) - (np.multiply(v_x,gradient_x(var))+np.multiply(v_y,gradient_y(var))) + R*var
-        
-        return dvar_dt.ravel()
-        '''
 
     y0 = var0.ravel()
 
@@ -117,18 +103,12 @@ var0 = np.zeros((size, size))
 var0[np.sqrt((X+2)**2 + (Y+2)**2) < radius] = 1.0
 
 def gaussian_filter(sigma=1, muu=0):
- 
-    # Initializing value of x,y as grid of kernel size
-    # in the range of kernel size
- 
     x, y = np.meshgrid(np.linspace(negX_boundary, posX_boundary, size),
                        np.linspace(negY_boundary, posY_boundary, size))
     dst = np.sqrt(x**2+y**2)
  
-    # lower normal part of gaussian
     normal = 1/(2.0 * np.pi * sigma**2)
  
-    # Calculating Gaussian filter
     gauss = np.exp(-((dst-muu)**2 / (2.0 * sigma**2))) * normal
     gauss /= np.max(gauss)
     return gauss
