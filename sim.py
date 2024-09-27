@@ -75,15 +75,13 @@ def solve(arguments,boundaries,initial, conditions,pde):
 
     extent = [negX_boundary,posX_boundary,negY_boundary,posY_boundary] 
 
-    fig, axes = plt.subplots(2, len(time_steps), figsize=(15, 7))
+    fig, axes = plt.subplots(1, len(time_steps), figsize=(15, 7))
 
     for i, t_idx in enumerate(time_steps):
-        ax_vx = axes[0, i]
-        ax_vx.imshow(vx_sol[:, :, t_idx], cmap=plt.cm.cool,
-                             interpolation='bilinear', extent=extent)
-        ax_vy = axes[1, i]
-        ax_vy.imshow(vy_sol[:, :, t_idx], cmap=plt.cm.cool,
-                             interpolation='bilinear', extent=extent)
+        ax_var = axes[i]
+        velocity_magnitude = np.sqrt(vx_sol**2 + vy_sol**2)
+        ax_var.imshow(velocity_magnitude[:,:,t_idx], cmap='jet', extent=extent,
+                    interpolation='bilinear',)
 
 
     plt.show()
@@ -105,9 +103,9 @@ dt = 0.001 #change in time
 x = np.linspace(negX_boundary,posX_boundary, size)
 y = np.linspace(negY_boundary,posY_boundary, size)
 X, Y = np.meshgrid(x, y)
-vx0 = np.zeros((size, size))
-vy0 = np.zeros((size, size))
-p = np.zeros((size, size))
+vx0 = np.zeros((size,size))
+vy0 = np.zeros((size,size))
+p = np.zeros((size,size))
 var0 = np.concatenate([vx0.ravel(), vy0.ravel()])
 
 rho = 1.0
