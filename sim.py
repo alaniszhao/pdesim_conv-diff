@@ -110,7 +110,7 @@ var0 = np.concatenate([vx0.ravel(), vy0.ravel()])
 
 rho = 1.0
 mu = 0.1
-f = [0, -9.81]
+f = [1,1]
 pde = 'D * delta_var - (v[0]*gradient_x(var)+v[1]*gradient_y(var)) + R*var'
 
 solve([rho,mu,f,p],
