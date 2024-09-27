@@ -13,21 +13,17 @@ def solve(arguments,boundaries,initial, conditions,pde):
     nt = int(T / dt) #total time points
     var0 = initial
 
-    def laplacian(Z,D):
+    def laplacian(Z,):
         Z_new = np.zeros_like(Z)
-        D_x = gradient_x(D)
-        D_y = gradient_y(D)
 
         Ztop = np.roll(Z, 1, axis=0)
         Zleft = np.roll(Z, 1, axis=1)
         Zbottom = np.roll(Z, -1, axis=0)
         Zright = np.roll(Z, -1, axis=1)
         
-        lap = (Ztop + Zleft + Zbottom + Zright - 4 * Z) / dx**2
+        Z_new = (Ztop + Zleft + Zbottom + Zright - 4 * Z) / dx**2
 
-        laplacian_with_D = D * lap + D_x * gradient_x(Z) + D_y * gradient_y(Z)
-
-        return laplacian_with_D
+        return Z_new
 
     def gradient_x(c):
         grad_x = np.zeros_like(c)
@@ -43,16 +39,20 @@ def solve(arguments,boundaries,initial, conditions,pde):
         
         return grad_y
 
-    def pd_eq(t, y, size, D, v_x,v_y, R):
-        var = y.reshape((size, size))
+    def pd_eq(t, y, size, rho,mu,f,p):
+        vx = y[:size**2].reshape((size, size))
+        vy = y[size**2:].reshape((size, size))
 
-        delta_var = laplacian(var, D)
+        lap_vx = laplacian(vx)
+        lap_vy = laplacian(vy)
 
-        advection_term = np.multiply(v_x, gradient_x(var)) + np.multiply(v_y, gradient_y(var))
+        grad_p_x = gradient_x(p)
+        grad_p_y = gradient_y(p)
 
-        dvar_dt = delta_var - advection_term + R * var
+        dvx_dt = (-grad_p_x + mu * lap_vx + f[0]) / rho
+        dvy_dt = (-grad_p_y + mu * lap_vy + f[1]) / rho
 
-        return dvar_dt.ravel()
+        return np.concatenate([dvx_dt.ravel(), dvy_dt.ravel()])
 
     y0 = var0.ravel()
 
@@ -60,11 +60,13 @@ def solve(arguments,boundaries,initial, conditions,pde):
     t_eval = np.linspace(0, T, nt)
     sol = solve_ivp(pd_eq, t_span, y0, args=(size, *args), t_eval=t_eval, method='RK45')
 
-    var_sol = sol.y.reshape((size, size, len(t_eval)))
+    vx_sol = sol.y[:size*size, :].reshape((size, size, len(t_eval)))
+    vy_sol = sol.y[size*size:2*size*size, :].reshape((size, size, len(t_eval)))
 
     time_steps = []
     num = 10
     curr = 0
+
     for i in range(num):
         time_steps.append(curr)
         curr+= int(nt/num)
@@ -73,12 +75,16 @@ def solve(arguments,boundaries,initial, conditions,pde):
 
     extent = [negX_boundary,posX_boundary,negY_boundary,posY_boundary] 
 
-    fig, axes = plt.subplots(1, len(time_steps), figsize=(12, 4))
+    fig, axes = plt.subplots(2, len(time_steps), figsize=(15, 7))
 
     for i, t_idx in enumerate(time_steps):
-        ax_var = axes[i]
-        im_var = ax_var.imshow(var_sol[:, :, t_idx], cmap=plt.cm.cool,
-                        interpolation='bilinear', extent=extent)
+        ax_vx = axes[0, i]
+        ax_vx.imshow(vx_sol[:, :, t_idx], cmap=plt.cm.cool,
+                             interpolation='bilinear', extent=extent)
+        ax_vy = axes[1, i]
+        ax_vy.imshow(vy_sol[:, :, t_idx], cmap=plt.cm.cool,
+                             interpolation='bilinear', extent=extent)
+
 
     plt.show()
 
@@ -99,27 +105,17 @@ dt = 0.001 #change in time
 x = np.linspace(negX_boundary,posX_boundary, size)
 y = np.linspace(negY_boundary,posY_boundary, size)
 X, Y = np.meshgrid(x, y)
-var0 = np.zeros((size, size))
-var0[np.sqrt((X+2)**2 + (Y+2)**2) < radius] = 1.0
+vx0 = np.zeros((size, size))
+vy0 = np.zeros((size, size))
+p = np.zeros((size, size))
+var0 = np.concatenate([vx0.ravel(), vy0.ravel()])
 
-def gaussian_filter(sigma=1, muu=0):
-    x, y = np.meshgrid(np.linspace(negX_boundary, posX_boundary, size),
-                       np.linspace(negY_boundary, posY_boundary, size))
-    dst = np.sqrt(x**2+y**2)
- 
-    normal = 1/(2.0 * np.pi * sigma**2)
- 
-    gauss = np.exp(-((dst-muu)**2 / (2.0 * sigma**2))) * normal
-    gauss /= np.max(gauss)
-    return gauss
-
-D = gaussian_filter(1,0)
-R = 0.0
-v_x = np.full((size,size),5)
-v_y = np.full((size,size),0)
+rho = 1.0
+mu = 0.1
+f = [0, -9.81]
 pde = 'D * delta_var - (v[0]*gradient_x(var)+v[1]*gradient_y(var)) + R*var'
 
-solve([D, v_x,v_y, R],
+solve([rho,mu,f,p],
       [[negX_boundary,posX_boundary],
        [negY_boundary,posY_boundary]],
        var0,
